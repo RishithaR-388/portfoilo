@@ -1,402 +1,127 @@
-var before = document.getElementById("before");
-var liner = document.getElementById("liner");
-var command = document.getElementById("typer"); 
-var textarea = document.getElementById("texter"); 
-var terminal = document.getElementById("terminal");
-var after = document.getElementById("after");
+import config from '../terminal-config.js';
+import {createRegistry,parseCommand,findCommand,suggestionsFor,CommandHistory} from './commands.js';
+import {element,safeLink,createTranscript,renderHelp} from './render.js';
+import {themeController,themes} from './theme.js';
+import {fetchRepos} from './github.js';
 
-var git = 0;
-var tab = 0;
-var commandsLog = [];
-var selectedTabCmd = "";
-var current_theme = "lila";
-
-// set dynamic terminal prompt based on config/profile
-if (liner) {
-  var promptOwner =
-    (typeof TERMINAL_CONFIG !== "undefined" &&
-      TERMINAL_CONFIG.profile &&
-      TERMINAL_CONFIG.profile.name) ||
-    "taey";
-  var normalized = String(promptOwner).split(" ")[0].toLowerCase();
-  liner.setAttribute("data-terminal-prompt", "guest@" + normalized + "-term:$ ~");
+const input=document.querySelector('#command-input');
+const form=document.querySelector('#command-form');
+const suggestions=document.querySelector('#suggestions');
+const status=document.querySelector('#live-status');
+const panel=document.querySelector('#transcript-panel');
+const transcript=createTranscript(document.querySelector('#transcript'),panel,document.querySelector('#transcript-count'));
+const registry=createRegistry(config), history=new CommandHistory();
+let composing=false, clipboardTimer, resumeAvailable=Boolean(config.profile.resume);
+function announce(message){status.textContent=message;}
+function navigate(id,update=true,focus=true){
+  const section=document.getElementById(id);
+  if(!section)return false;
+  if(section.matches('.project-card'))section.querySelector('details').open=true;
+  if(update&&location.hash!==`#${id}`)window.history.pushState(null,'',`#${id}`);
+  const heading=id==='main'?section:section.querySelector('h2,h1,h3')||section;
+  if(focus){heading.setAttribute('tabindex','-1');heading.focus({preventScroll:true});}
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches||!config.features.motion;
+  section.scrollIntoView({behavior:reduced?'instant':'smooth',block:'start'});
+  document.querySelectorAll('nav a').forEach(a=>{
+    if(a.hash===`#${id}`||(id.startsWith('project-')&&a.hash==='#projects'))a.setAttribute('aria-current','location');else a.removeAttribute('aria-current');
+  });
+  return true;
 }
-
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-setTimeout(async function() {
-  //await new Promise((resolve)=>{resolve(loopLines(banner, "terminal-banner", 80));});
-  await loopLines(banner, "terminal-banner", 20);
-  loopLines(welcomeMsg, "", 80);
-  textarea.focus();
-}, 100);
-
-window.addEventListener('click', focusTextArea, true); 
-window.addEventListener("keyup", enterKey);
-
-//init
-textarea.value = "";
-command.innerHTML = textarea.value;
-
-function focusTextArea() {
-  textarea.focus();
+function updateSuggestions(){
+  suggestions.replaceChildren();
+  const options=suggestionsFor(registry,input.value);
+  suggestions.hidden=!options.length;
+  options.forEach(option=>{const button=element('button',option);button.type='button';button.addEventListener('click',()=>{input.value=option;suggestions.hidden=true;input.focus();});suggestions.append(button);});
 }
-
-function enterKey(e) {
-  if (e.keyCode == 181) {
-    document.location.reload(true);
-  }
-  // Enter key
-  if (e.keyCode == 13) {    
-    removeTabCompleteLine();    
-    tab = 0;                                  // update the tab index
-    if ( selectedTabCmd != "" ) {
-      textarea.value = selectedTabCmd;
-      command.innerHTML = selectedTabCmd;
-      selectedTabCmd = "";
-      return;
+function message(entry,text){entry.append(element('p',text));}
+export function run(raw){
+  if(raw.length>240){announce('Commands are limited to 240 characters.');return;}
+  const {name,args}=parseCommand(raw);if(!name)return;
+  history.push(raw);input.value='';suggestions.hidden=true;
+  if(name==='clear'){transcript.clear();announce('Transcript cleared. Portfolio content is unchanged.');return;}
+  const entry=transcript.add(raw), command=findCommand(registry,name);
+  if(!command){const options=suggestionsFor(registry,name.slice(0,2));message(entry,`Command not found: ${name}. ${options.length?`Try ${options[0]} or help.`:'Type help to see available commands.'}`);announce('Command not found. Try help.');return;}
+  if(command.section){
+    navigate(command.section);message(entry,`Opened ${command.section==='home'?'the overview':command.section}.`);
+    if(command.name==='resume'&&!resumeAvailable){message(entry,config.profile.resume?'The PDF is temporarily unavailable. Please email me for a copy.':'My résumé is available on request. Please email me for a copy.');entry.append(safeLink(config.profile.email,`mailto:${config.profile.email}`));}
+    else if(command.name==='resume'){entry.append(safeLink('Open résumé (PDF)',config.profile.resume),document.createTextNode(' · '));const download=safeLink('Download résumé',config.profile.resume);download.setAttribute('download','');entry.append(download);}
+  }else if(command.link){entry.append(safeLink(command.name==='email'?config.profile.email:`Open ${command.name} ↗`,command.link));}
+  else switch(command.name){
+    case 'help':renderHelp(entry,registry,run);break;
+    case 'project':{
+      const project=config.projects.find(p=>p.id===args.trim().toLowerCase());
+      if(project){navigate(`project-${project.id}`);message(entry,`Opened ${project.subtitle}.`);}else message(entry,`Choose a project: ${config.projects.map(p=>`project ${p.id}`).join(' · ')}`);break;
     }
-    commandsLog.push(command.innerHTML);
-    git = commandsLog.length;                 // update the arrow key index
-    addLine(" > " + command.innerHTML, "no-animation", 0);
-    commander(command.innerHTML.toLowerCase());
-    command.innerHTML = "";
-    textarea.value = "";
-  }
-  // Arrow up
-  if (e.keyCode == 38 && git != 0) {
-    git -= 1;
-    textarea.value = commandsLog[git];
-    command.innerHTML = textarea.value;
-  }
-  // Arrow down
-  if (e.keyCode == 40 && git != commandsLog.length) {
-    git += 1;
-    if (commandsLog[git] === undefined) {
-      textarea.value = "";
-    } else {
-      textarea.value = commandsLog[git];
+    case 'theme':{
+      const words=args.toLowerCase().trim().split(/\s+/);
+      if(words[0]==='ls')message(entry,`Available themes: ${themes.join(', ')}. Current selection: ${themeController.get()}.`);
+      else if(words[0]==='system'&&words.length===1){themeController.set('system');message(entry,'Theme follows your system preference.');}
+      else if(words[0]==='set'&&words.length===2&&themeController.set(words[1]))message(entry,`Theme set to ${words[1]}.`);
+      else message(entry,'Try theme ls, theme set graphite, theme set paper, or theme system.');break;
     }
-    command.innerHTML = textarea.value;
+    case 'history':history.items.forEach((item,i)=>message(entry,`${i+1}  ${item}`));break;
+    case 'banner':entry.append(element('pre',`┌────────────────────┐\n│  ${config.profile.name.padEnd(18)}│\n│  backend · data    │\n└────────────────────┘`));break;
+    case 'extras':message(entry,'sudo make coffee → A good idea. Sadly, this terminal only serves portfolio content.');break;
   }
-  // Tab complete
-  if (e.keyCode == 9) {
-    // if (textarea.value.length == 0) {
-    //   refreshTabCompleteLine("");
-    // }
-    // else {
-      cmdOptions = completeQuery(allCommands, textarea.value);
-      if ( tab == cmdOptions.length ) {
-        tab = 0;
-      }
-      if (cmdOptions.length == 1) {
-        textarea.value = cmdOptions[0];
-        command.innerHTML = textarea.value;
-      }
-      else if (cmdOptions.length > 1) {
-        selectedTabCmd = cmdOptions[tab];
+  announce(`${command.name} command completed.`);
+}
+form.addEventListener('submit',event=>{event.preventDefault();if(!composing)run(input.value);});
+input.addEventListener('compositionstart',()=>{composing=true;});
+input.addEventListener('compositionend',()=>{composing=false;updateSuggestions();});
+input.addEventListener('input',()=>{if(!composing)updateSuggestions();});
+input.addEventListener('keydown',event=>{
+  if(event.isComposing||composing)return;
+  if(event.key==='ArrowUp'||event.key==='ArrowDown'){event.preventDefault();input.value=history.move(event.key==='ArrowUp'?-1:1,input.value);suggestions.hidden=true;}
+  if(event.key==='Escape')suggestions.hidden=true;
+  if(event.altKey&&event.key==='ArrowRight'){
+    const first=suggestionsFor(registry,input.value)[0];if(first){event.preventDefault();input.value=first;updateSuggestions();}
+  }
+});
+document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>run(button.dataset.command)));
+document.addEventListener('click',event=>{
+  const anchor=event.target.closest('a[href^="#"]');
+  if(!anchor||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
+  const id=anchor.getAttribute('href').slice(1);
+  if(!document.getElementById(id))return;
+  event.preventDefault();
+  if(anchor.classList.contains('back-project'))anchor.closest('details').open=false;
+  navigate(id);
+});
+window.addEventListener('popstate',()=>{const id=decodeHash();navigate(document.getElementById(id)?id:'home',false);});
+window.addEventListener('hashchange',()=>{const id=decodeHash();if(document.getElementById(id))navigate(id,false);});
+function decodeHash(){try{return decodeURIComponent(location.hash.slice(1));}catch{return '';}}
+const initial=decodeHash();if(initial)requestAnimationFrame(()=>navigate(document.getElementById(initial)?initial:'home',false,false));
 
-        suggestionTxt = "";
-        for (let i = 0; i < cmdOptions.length; i++) {
-          if ( i == tab ) {
-            suggestionTxt += `<span class=\"command\">${cmdOptions[i]}</span>    `;
-            continue;
-          }
-          suggestionTxt += `<span class=\"inherit\">${cmdOptions[i]}</span>    `;
-        }
-        refreshTabCompleteLine(suggestionTxt, "no-animation", 0);
-      }
-      tab += 1;
+const copy=document.querySelector('#copy-email');
+copy.addEventListener('click',async()=>{
+  try{await navigator.clipboard.writeText(config.profile.email);copy.textContent='Copied ✓';announce('Email address copied.');}
+  catch{copy.textContent='Select email to copy';announce('Clipboard unavailable. Select the email address and copy it manually.');}
+  clearTimeout(clipboardTimer);clipboardTimer=setTimeout(()=>{copy.textContent='Copy email';},3000);
+});
+const extras=document.querySelector('.github-extra');let loading=false,loaded=false;
+async function loadGithub(){
+  if(loading||loaded)return;loading=true;
+  const box=document.querySelector('#github-repos');box.replaceChildren(element('p','Loading public repositories…'));box.setAttribute('aria-busy','true');
+  try{
+    const repos=await fetchRepos(config.profile.githubUsername);box.replaceChildren();
+    if(!repos.length)box.append(element('p','No public repositories to display. The featured projects above are still available.'));
+    else{const list=element('ul');repos.forEach(repo=>{const li=element('li');li.append(safeLink(repo.name,repo.html_url),element('p',repo.description));list.append(li);});box.append(list);}loaded=true;announce('GitHub repositories loaded.');
+  }catch(error){
+    const text=error.name==='AbortError'?'GitHub took too long to respond.':error.message;
+    const button=element('button','Try again');button.type='button';button.addEventListener('click',loadGithub);box.replaceChildren(element('p',`${text} Your featured projects are available above.`),button);announce('GitHub unavailable. Featured projects remain available.');
+  }finally{loading=false;box.removeAttribute('aria-busy');}
+}
+extras?.addEventListener('toggle',()=>{if(extras.open)loadGithub();});
+document.querySelectorAll('[data-enhance]').forEach(node=>{node.hidden=false;});
+
+// A missing asset should not leave an unexplained dead download action.
+if (config.profile.resume) fetch(config.profile.resume,{method:'HEAD'}).then(response=>{
+  if(response.ok)return;
+  resumeAvailable=false;
+  document.querySelectorAll('a').forEach(link=>{
+    if(link.getAttribute('href')===config.profile.resume){
+      link.removeAttribute('href');link.setAttribute('aria-disabled','true');link.title='PDF temporarily unavailable. Please email me for a copy.';
     }
-  // }
-}
-
-
-function commander(cmd) {
-  var cmdAll = cmd.split(" "); 
-  var cmd = cmdAll[0];
-  var args = "";
-  if (cmdAll.length > 1) {
-    args = cmdAll.slice(1).join(" ");
-  }
-  var cmdLower = cmd.toLowerCase();
-  if (typeof linksOthers !== "undefined" && linksOthers[cmdLower]) {
-    addLine("Opening " + linksOthers[cmdLower].name + "...", "color2", 0);
-    newTab(linksOthers[cmdLower].url);
-    return;
-  }
-  switch (cmdLower) {
-    // content stuff
-    case "help":
-      loopLines(help, "color2 margin no-animation", 20);
-      break;
-    case "about":
-      loopLines(about, "color2 margin no-animation", 0);
-      break;
-    case "links":
-      loopLines(links, "color2 margin no-animation", 0);
-      break;
-    case "projects":
-      loopLines(projects, "color2 margin no-animation", 0);
-      // fetch repos asynchronously
-      setTimeout(function() {
-        loadReposIntoBox(GITHUB_USERNAME, 4, "repo-box");
-      }, 200);
-      break;
-    case "email":
-      addLine(`Opening mailto:<a href="mailto:${EMAIL_ADDRESS}">${EMAIL_ADDRESS}</a>...`, "color2", 80);
-      newTab(email);
-      break;
-    // socials
-    case "linkedin":
-      if (linkedin) {
-        addLine("Opening LinkedIn...", "color2", 0);
-        newTab(linkedin);
-      } else {
-        addLine("LinkedIn URL is not configured.", "color2", 0);
-      }
-      break;
-    case "github":
-      addLine("Opening GitHub...", "color2", 0);
-      newTab(github);
-      break;
-    // functional commands
-    case "gui":
-      addLine("Work in progress...", "inherit", 0);
-      break;
-    case "history":
-      addLine("<br>", "", 0);
-      loopLines(commandsLog, "color2", 20);
-      addLine("<br>", "command", 80 * commandsLog.length + 50);
-      break;
-    case "home":
-      addLine("Returning to home screen...", "inherit no-animation", 0);
-      setTimeout(function() {
-        document.location.reload(true);
-      }, 150);
-      break;
-    case "clear":
-      setTimeout(function() {
-        terminal.innerHTML = '<a id="before"></a>';
-        before = document.getElementById("before");
-      }, 1);
-      break;
-    case "banner":
-      loopLines(banner, "terminal-banner", 20);
-      break;
-    case "theme":
-      var allArgs = args.split(" ");
-      var themeCmd = allArgs[0];
-      var themeArg = "";
-      if (allArgs.length == 2) {
-        themeArg = allArgs[1];
-      }
-      switch (themeCmd.toLowerCase()) {
-        case "":
-          addLine(`Usage: <span class=\"command\">theme</span> [arg]`, "inherit no-animation", 0);
-          addLine(`Args:`, "inherit no-animation", 0);
-          addLine(`   - <span class=\"command\">ls</span>: list all themes`, "inherit no-animation", 0);
-          addLine(`   - <span class=\"command\">set</span>: set a theme`, "inherit no-animation", 0);
-          addLine(`Example:`, "inherit no-animation", 0);
-          addLine(`   <span class=\"command\">theme random</span> to select a random theme.`, "inherit no-animation", 0);
-          addLine(`   <span class=\"command\">theme ls</span> to see all available themes.`, "inherit no-animation", 0);
-          break;
-        case "ls":
-          loopLines(Object.keys(themes), "inherit", 80);
-          break;
-        case "set":
-          if ( !Object.keys(themes).includes(themeArg) ) {
-            addLine(`<span class=\"inherit\">Theme '${themeArg}' does not exist</span>`);
-            break;
-          }
-          addLine(`<span class=\"inherit\">Setting theme: '${themeArg}'</span>`);
-          current_theme = themeArg;
-          setThemeCSS(themeArg);
-          break;
-        case "random":
-          var theme = current_theme;
-          while (theme == current_theme) {
-            theme = Object.keys(themes)[Math.floor(Math.random()*Object.keys(themes).length)];
-          }
-          addLine(`<span class=\"inherit\">Setting theme: '${theme}'</span>`);
-          current_theme = theme;
-          setThemeCSS(theme);
-          break;
-      }
-      break;
-    case "echo":
-      addLine(`${args}`, "color2", 80);
-      break;
-    case "ping":
-      if (/^(?!0)(?!.*\.$)((1?\d?\d|25[0-5]|2[0-4]\d)(\.|$)){4}$/.test(args)) {
-          addLine(`<span class=\"inherit\">PING ${args} (${args}): 56 data bytes</span>`);
-          addLine(`<span class=\"inherit\">64 bytes from ${args}: icmp_seq=0 ttl=116 time=25.862 ms</span>`);
-      }
-      else {
-          addLine(`<span class=\"inherit\">ping: cannot resolve ${args}: Unknown host</span>`);
-      }
-      break;
-    case "explain":
-      if (args) {
-        addLine(`<span class=\"inherit\">[${CLAUDE_ASSISTANT_NAME}] I tried to explain <span class=\"command\">${args}</span>, but ${CLAUDE_OWNER_NAME} is asking for more context. Paste a snippet and I’ll try again.</span>`, "color2", 80);
-      } else {
-        addLine(`<span class=\"inherit\">Usage: <span class=\"command\">explain &lt;topic&gt;</span> — like asking ${CLAUDE_ASSISTANT_NAME} to explain code.</span>`, "color2", 80);
-      }
-      break;
-    case "run":
-      if (args) {
-        addLine(`<span class=\"inherit\">[${CLAUDE_ASSISTANT_NAME}] I tried to run <span class=\"command\">${args}</span>, but ${CLAUDE_OWNER_NAME} is blocking execution!</span>`, "color2", 80);
-      } else {
-        addLine(`<span class=\"inherit\">Usage: <span class=\"command\">run &lt;command&gt;</span> — simulates running a shell command in ${CLAUDE_ASSISTANT_NAME}.</span>`, "color2", 80);
-      }
-      break;
-    case "edit":
-      if (args) {
-        addLine(`<span class=\"inherit\">[${CLAUDE_ASSISTANT_NAME}] I tried to edit <span class=\"command\">${args}</span>, but a change request PR was filed to ${CLAUDE_OWNER_NAME} instead.</span>`, "color2", 80);
-      } else {
-        addLine(`<span class=\"inherit\">Usage: <span class=\"command\">edit &lt;file-or-thing&gt;</span> — like asking ${CLAUDE_ASSISTANT_NAME} to refactor something.</span>`, "color2", 80);
-      }
-      break;
-    // fun commands
-    case "ls":
-      addLine("<span class=\"inherit\">some</span>", "color2", 80);
-      addLine("<span class=\"inherit\">fake</span>", "color2", 80);
-      addLine("<span class=\"inherit\">folders</span>", "color2", 80);
-      if (args == "-a") {
-        addLine("<span class=\"inherit\">.and</span>", "color2", 80);
-        addLine("<span class=\"inherit\">.hidden</span>", "color2", 80);
-        addLine("<span class=\"inherit\">.files</span>", "color2", 80);
-      }
-      break;
-    case "cd":
-      // check for file like path given in args
-      addLine("<span class=\"inherit\"></span>", "color2", 80);
-      break;
-    case "vi":
-      addLine("<span class=\"inherit\">why use vi? Try <span class=\"command\">'vim'</span> instead?</span>", "color2", 80);
-      break;
-    case "vim":
-      addLine("<span class=\"inherit\">why use vim? Try <span class=\"command\">'emacs'</span> instead?</span>", "color2", 80);
-      break;
-    case "emacs":
-      addLine("<span class=\"inherit\">really? emacs? You should be using <span class=\"command\">'nvim'</span></span>", "color2", 80);
-      break;
-    case "nvim":
-      addLine("<span class=\"inherit\">really nvim? Wanna try <span class=\"command\">'vim'</span> instead?</span>", "color2", 80);
-      break;
-    case "sudo":
-      var sudoCmd = args ? "sudo " + args : "sudo";
-      var ownerName = (typeof TERMINAL_CONFIG !== "undefined" && TERMINAL_CONFIG.profile && TERMINAL_CONFIG.profile.name) || "Taey";
-      addLine(`<span class=\"inherit\">Permission denied: <span class=\"command\">${ownerName}</span> denied permission to run <span class=\"command\">'${sudoCmd}'</span>.</span>`, "color2", 80);
-      setTimeout(function() {
-      }, 1000);
-      break;
-    case "":
-      addLine("", "color2", 0);
-      break;
-    default:
-      addLine(`Command not found: ${cmd}. Type <span class=\"command\">'help'</span> to see available commands.`, "inherit no-animation", 0);
-      break;
-  }
-}
-
-function newTab(link) {
-  setTimeout(function() {
-    window.open(link, "_blank");
-  }, 500);
-}
-
-async function addLine(text, style, time) {
-  var t = "";
-  for (let i = 0; i < text.length; i++) {
-    if (text.charAt(i) == " " && text.charAt(i + 1) == " ") {
-      t += "&nbsp;&nbsp;";
-      i++;
-    } else {
-      t += text.charAt(i);
-    }
-  }
-  //setTimeout(function() {
-  await delay(time);
-  var next = document.createElement("p");
-    next.innerHTML = t;
-    next.className = style;
-
-    before.parentNode.insertBefore(next, before);
-
-    window.scrollTo(0, document.body.offsetHeight);
-  //}, time);
-  return;
-}
-
-async function loopLines(name, style, time) {
-  // name.forEach(function(item, index) {
-  //     addLine(item, style, index * time);
-  // });
-  for (var i = 0; i < name.length; i++) {
-    await addLine(name[i], style, i * time);
-  }
-  return;
-}
-
-function setThemeCSS(theme) {
-  // Switch the active CSS theme by reusing (or creating) a single theme stylesheet link
-  if (!themes || !themes[theme]) return;
-
-  var href = themes[theme];
-  var head = document.head || document.documentElement;
-
-  // Prefer an existing explicitly tagged theme link
-  var link =
-    document.querySelector('link[rel="stylesheet"][data-terminal-theme="true"]') ||
-    // Fallback: first stylesheet that looks like one of our theme files
-    document.querySelector('link[rel="stylesheet"][href^="css/style_"]');
-
-  if (link) {
-    link.setAttribute('href', href);
-    link.setAttribute('data-terminal-theme', 'true');
-  } else {
-    link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.type = 'text/css';
-    link.href = href;
-    link.setAttribute('data-terminal-theme', 'true');
-    head.appendChild(link);
-  }
-}
-
-function refreshTabCompleteLine(text, style, time) {
-  // Refreshes the line below the command for tab completion suggestions
-  removeTabCompleteLine();
-  setTimeout(function() {
-    var next = document.createElement("p");
-    next.setAttribute("id", "tabCompleteLine");
-    next.innerHTML = text;
-    next.className = style;
-
-    after.parentNode.insertBefore(next, after);
-
-    window.scrollTo(0, document.body.offsetHeight);
-  }, time);
-}
-
-function removeTabCompleteLine() {
-  // Deletes the HTML element
-  var tcl = document.getElementById("tabCompleteLine");
-  if ( tcl !== null ) {
-    tcl.outerHTML = "";
-  }
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Apply default theme from config on load
-(function() {
-  var defaultTheme = (typeof TERMINAL_CONFIG !== "undefined" && TERMINAL_CONFIG.theme && TERMINAL_CONFIG.theme.defaultTheme) || null;
-  if (defaultTheme && typeof themes !== "undefined" && themes[defaultTheme]) {
-    setThemeCSS(defaultTheme);
-    current_theme = defaultTheme;
-  }
-})();
+  });
+  document.querySelector('.resume-actions').append(element('p','PDF temporarily unavailable. Email me for a copy.'));
+}).catch(()=>{/* Keep native links usable when only the HEAD request is blocked. */});

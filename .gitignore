@@ -24,3 +24,9 @@ build/
 # docs/
 docs/
 
+# Verification artifacts
+/test-results/
+/playwright-report/
+/.dist-stage/
+# Private résumé documents stay local and are never committed.
+*.pdf
