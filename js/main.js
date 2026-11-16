@@ -44,13 +44,14 @@ export function run(raw){
   if(command.section){
     navigate(command.section);message(entry,`Opened ${command.section==='home'?'the overview':command.section}.`);
     if(command.name==='resume'&&!resumeAvailable){message(entry,config.profile.resume?'The PDF is temporarily unavailable. Please email me for a copy.':'My résumé is available on request. Please email me for a copy.');entry.append(safeLink(config.profile.email,`mailto:${config.profile.email}`));}
+    else if(command.name==='resume'&&config.profile.resume.startsWith('https://')){entry.append(safeLink('View résumé ↗',config.profile.resume));}
     else if(command.name==='resume'){entry.append(safeLink('Open résumé (PDF)',config.profile.resume),document.createTextNode(' · '));const download=safeLink('Download résumé',config.profile.resume);download.setAttribute('download','');entry.append(download);}
   }else if(command.link){entry.append(safeLink(command.name==='email'?config.profile.email:`Open ${command.name} ↗`,command.link));}
   else switch(command.name){
     case 'help':renderHelp(entry,registry,run);break;
     case 'project':{
       const project=config.projects.find(p=>p.id===args.trim().toLowerCase());
-      if(project){navigate(`project-${project.id}`);message(entry,`Opened ${project.subtitle}.`);}else message(entry,`Choose a project: ${config.projects.map(p=>`project ${p.id}`).join(' · ')}`);break;
+      if(project){navigate(`project-${project.id}`);message(entry,`Opened ${project.subtitle||project.title}.`);}else message(entry,`Choose a project: ${config.projects.map(p=>`project ${p.id}`).join(' · ')}`);break;
     }
     case 'theme':{
       const words=args.toLowerCase().trim().split(/\s+/);
@@ -115,7 +116,7 @@ extras?.addEventListener('toggle',()=>{if(extras.open)loadGithub();});
 document.querySelectorAll('[data-enhance]').forEach(node=>{node.hidden=false;});
 
 // A missing asset should not leave an unexplained dead download action.
-if (config.profile.resume) fetch(config.profile.resume,{method:'HEAD'}).then(response=>{
+if (config.profile.resume && !config.profile.resume.startsWith('https://')) fetch(config.profile.resume,{method:'HEAD'}).then(response=>{
   if(response.ok)return;
   resumeAvailable=false;
   document.querySelectorAll('a').forEach(link=>{

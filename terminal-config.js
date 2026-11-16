@@ -7,7 +7,7 @@ export default {
     about: 'From recovering payment transactions to making data pipelines more resilient, I enjoy working on the systems behind the experience. My work spans backend engineering, payment integrations, orchestration, and machine learning.',
     aboutMore: 'My foundation is in Data Science and Artificial Intelligence at IIT Bhilai. Today, I bring that curiosity to backend systems, payments, and data platforms.',
     email: 'rishitha4005@gmail.com', githubUsername: 'RishithaR-388',
-    resume: '', phone: '', availability: '',
+    resume: 'https://drive.google.com/file/d/1UrlBqcSK0Q1oDFABOmLZGlZCQX2FFXVV/view?usp=sharing', phone: '', availability: '',
   },
   links: [
     {name:'GitHub', url:'https://github.com/RishithaR-388'},
@@ -40,6 +40,12 @@ export default {
         'Enhanced existing APIs with new features and functionality.',
       ]},
     ]},
+    {company:'MPYG', mark:'M', period:'Jan — Feb 2023', roles:[
+      {title:'Computer Vision Intern', team:'Computer Vision · Remote', period:'Jan — Feb 2023', summary:'Applying computer vision to yoga practice.', bullets:[
+        'Developed a backend machine-learning model for yoga pose detection and correction.',
+        'Designed to support real-time feedback and guidance on posture and alignment, helping individuals improve their yoga practice.',
+      ], tags:['Python','OpenCV','TensorFlow']},
+    ]},
     {company:'SpeedLabs', mark:'S', period:'May — Jul 2022', roles:[
       {title:'Tech Intern', team:'Data Analytics', period:'May — Jul 2022', summary:'Connecting machine learning with useful data tools.', bullets:[
         'Automated an ML model to segment and classify JEE question images, achieving 92% accuracy on that task.',
@@ -49,7 +55,7 @@ export default {
     ]},
   ],
   projects: [
-    {id:'recommendations', number:'01', kind:'Personal project', title:'A better next pick.', subtitle:'Recommendation System',
+    {id:'recommendations', number:'01', kind:'Personal project', title:'Recommendation System', subtitle:'',
       description:'Finding the next movie, series, or book with recommendations built around user preferences.',
       tags:['Python','Streamlit','TF-IDF'], steps:['Your preferences','Text vectors','Top 10 picks'],
       problem:'Help users explore movies, series, and books through a preference-based recommendation interface.',
@@ -57,7 +63,7 @@ export default {
       outcome:'A deployed Streamlit application that returns a top-10 recommendation list based on user preferences.',
       source:'https://github.com/RishithaR-388/Recommendation-System', demo:'', image:'',
     },
-    {id:'deepweeds', number:'02', kind:'Honours research', title:'Learning what grows.', subtitle:'ML for precision agriculture',
+    {id:'deepweeds', number:'02', kind:'Honours research', title:'ML for Precision Agriculture', subtitle:'',
       description:'Exploring how deep learning can support weed recognition in precision agriculture.',
       tags:['EfficientNet','DeepWeeds','Computer Vision'], steps:['DeepWeeds images','EfficientNet','Weed recognition'],
       problem:'Explore machine-learning applications in precision agriculture through an honours research project at IIT Bhilai.',
@@ -73,5 +79,5 @@ export default {
     {name:'Databases', items:['MySQL','Redis','MongoDB','Cassandra','RocksDB']},
     {name:'Cloud & Delivery', items:['Docker','Jenkins','GitHub Actions','Ansible','Chef','AWS']},
   ],
-  education: {school:'IIT Bhilai', degree:'BTech · Data Science & Artificial Intelligence', honours:'Honours', period:'2020 — 2024', cgpa:'8.4', description:'Honours research in machine learning for precision agriculture, supervised by Dr. Nitin Khanna.'},
+  education: {school:'IIT Bhilai', degree:'BTech-Honours · Data Science & Artificial Intelligence', honours:'Honours', period:'2020 — 2024', cgpa:'8.4', description:'Honours research in machine learning for precision agriculture, supervised by Dr. Nitin Khanna.'},
 };

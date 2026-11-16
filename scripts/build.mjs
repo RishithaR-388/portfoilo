@@ -5,7 +5,7 @@ import config from '../terminal-config.js';
 import {renderPage, validateConfig} from './page.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 validateConfig(config);
-if (config.profile.resume) await access(path.join(root,config.profile.resume));
+if (config.profile.resume && !config.profile.resume.startsWith('https://')) await access(path.join(root,config.profile.resume));
 const html = renderPage(config);
 if (process.argv.includes('--check')) {
   if (await readFile(path.join(root,'index.html'),'utf8') !== html) throw new Error('Generated index.html is stale. Run npm run build.');

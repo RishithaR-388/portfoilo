@@ -25,7 +25,7 @@ Edit `terminal-config.js`, then run `npm run build`. The build generates both `i
 - `features`: optional ASCII artwork/banner, motion, GitHub extras, easter egg, theme selector, and phone visibility. `showPhone` is false by default.
 - `theme.defaultTheme`: `system`, `graphite`, or `paper`. Visitor selection takes precedence. `theme.accent` optionally overrides the dark accent with a six-digit hex color; recheck contrast after changing it. `theme.font` accepts `system` (default) or `mono`.
 
-The GitHub version deliberately excludes résumé PDFs. `profile.resume` is empty, so the site offers the résumé by email. All PDFs are ignored by Git and excluded from `dist/`; the original document remains local. To intentionally enable a public download in the future, set `profile.resume`, adjust the PDF exclusion in `scripts/build.mjs`, and explicitly opt that file into Git. Do not do this unless you want the PDF published.
+The GitHub version deliberately excludes résumé PDFs. `profile.resume` points to Google Drive, so View résumé opens the hosted document. Clear the field to offer it by email instead. All PDFs are ignored by Git and excluded from `dist/`; the original document remains local. To intentionally host a local PDF download in the future, set `profile.resume` to an assets path, adjust the PDF exclusion in `scripts/build.mjs`, and explicitly opt that file into Git. Do not do this unless you want the PDF published.
 
 ## Design and behavior
 
@@ -64,3 +64,7 @@ Once you select the real host URL, add a canonical URL and absolute social-image
 ## Content review before public release
 
 The local implementation uses the supplied résumé. Confirm current job dates and employer metric suitability before publication. The eight-nines availability figure is deliberately replaced by a qualitative resilience statement. GitHub profile ownership is inferred from the supplied project URL. The ambiguous Scholar link is omitted. Research accuracy is contextualized as a reported résumé result. No live demos, project screenshots, or unpublished implementation details are invented.
+
+## Vercel
+
+`vercel.json` sets the build command to `npm run build` and output directory to `dist`. Import the repository as a static site; no backend configuration or uploaded résumé PDF is needed.

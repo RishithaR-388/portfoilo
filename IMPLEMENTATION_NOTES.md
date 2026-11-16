@@ -52,3 +52,7 @@ This implementation was initially local-only. The subsequent GitHub handoff crea
 ## GitHub handoff
 
 The résumé PDF is ignored and excluded from the build. Generated HTML and commands present an email request instead of a PDF download. A clean checkout builds without access to the local résumé. Deployment source and the manual Pages workflow are included.
+
+## Content update
+
+Added MPYG Computer Vision internship (remote, January–February 2023), Python/OpenCV/TensorFlow, and yoga pose detection/correction work. Degree now reads BTech-Honours. Project headings use their actual names. Résumé actions and the terminal command now point to the supplied Google Drive URL; external documents are not fetched with cross-origin HEAD requests or treated as local build inputs. PDFs remain excluded from Git and deployment. `vercel.json` explicitly selects `dist` as the output directory.

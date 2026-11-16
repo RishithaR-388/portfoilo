@@ -13,7 +13,7 @@ export function createRegistry(config) {
     {name:'project',group:'Explore',description:'Open a project detail',arguments:config.projects.map(p=>p.id)},
     {name:'skills',section:'skills',group:'Explore',description:'Languages, tools, and platforms'},
     {name:'education',section:'education',group:'Explore',description:'My academic foundations'},
-    {name:'resume',section:'resume',group:'Connect',description:config.profile.resume?'Open or download my résumé':'Request my résumé by email'},
+    {name:'resume',section:'resume',group:'Connect',description:config.profile.resume?'View my résumé':'Request my résumé by email'},
     {name:'contact',aliases:['links'],section:'contact',group:'Connect',description:'Get in touch'},
     {name:'email',group:'Connect',description:'Show my email address',link:`mailto:${config.profile.email}`},
     ...config.links.map(l=>({name:l.name.toLowerCase().replace(/\s+/g,''),group:'Connect',description:`Find me on ${l.name}`,link:l.url})),

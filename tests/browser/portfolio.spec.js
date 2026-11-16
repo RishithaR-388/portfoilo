@@ -40,10 +40,10 @@ test('accessible and responsive in both themes',async({page},testInfo)=>{
  await page.setViewportSize({width:812,height:375});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 
-test('no-script content and résumé request',async({browser})=>{
+test('no-script content and hosted résumé',async({browser})=>{
  const context=await browser.newContext({javaScriptEnabled:false});const page=await context.newPage();await page.goto('/');
  await expect(page.locator('#experience')).toContainText('Visa');await expect(page.locator('#projects')).toContainText('Recommendation System');await expect(page.locator('.terminal-zone')).toBeHidden();
- await expect(page.locator('.resume-actions a')).toHaveAttribute('href',/^mailto:/);await expect(page.locator('.resume-inline')).toContainText('Request résumé');await context.close();
+ await expect(page.locator('.resume-actions a')).toHaveAttribute('href','https://drive.google.com/file/d/1UrlBqcSK0Q1oDFABOmLZGlZCQX2FFXVV/view?usp=sharing');await expect(page.locator('.resume-inline')).toContainText('View résumé');await context.close();
 });
 
 test('GitHub failure and retry, safe description, clipboard fallback',async({page})=>{
@@ -68,6 +68,6 @@ test('touch navigation, invalid stored theme, copy success, and composition',asy
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await context.close();
 });
 
-test('omitted PDF produces useful contact fallback',async({page})=>{
- await page.goto('/');await expect(page.locator('#resume')).toContainText('available on request');await expect(page.locator('a[href$=".pdf"]')).toHaveCount(0);const input=page.locator('#command-input');await input.fill('resume');await input.press('Enter');await expect(page.locator('.command-entry').last()).toContainText('Please email me');
+test('hosted résumé opens without a local PDF or cross-origin HEAD request',async({page})=>{
+ await page.goto('/');await expect(page.locator('.resume-actions a')).toHaveAttribute('target','_blank');await expect(page.locator('a[href$=".pdf"]')).toHaveCount(0);const input=page.locator('#command-input');await input.fill('resume');await input.press('Enter');await expect(page.locator('.command-entry').last().getByRole('link')).toHaveAttribute('href',/^https:\/\/drive.google.com\//);
 });
